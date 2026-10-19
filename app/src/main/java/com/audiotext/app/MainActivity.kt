@@ -1,6 +1,7 @@
 package com.audiotext.app
 
 import android.content.ContentValues
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
@@ -52,6 +53,13 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 isReady = ready,
                 voices = voiceList,
                 status = status,
+                onInstallGeorgian = {
+                    try {
+                        startActivity(Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA))
+                    } catch (_: Exception) {
+                        status = "Open your phone's Text-to-speech settings and check available voice data."
+                    }
+                },
                 onSpeak = { text, voice, speed ->
                     val engine = tts
                     if (engine == null || !ready) {
@@ -171,6 +179,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         isReady: Boolean,
         voices: List<Voice>,
         status: String,
+        onInstallGeorgian: () -> Unit,
         onSpeak: (String, Voice?, Float) -> Unit,
         onStop: () -> Unit,
         onSave: (String, Voice?, Float, (String) -> Unit) -> Unit
@@ -233,6 +242,19 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                                         )
                                     }
                                 }
+                            }
+                            if (voices.none { it.locale.language.equals("ka", ignoreCase = true) }) {
+                                OutlinedButton(
+                                    onClick = onInstallGeorgian,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("ქართული (Georgian) · Check / install voice")
+                                }
+                                Text(
+                                    "Georgian is not currently provided by your installed TTS voices. Tap above to check whether your phone's speech engine offers it.",
+                                    color = Color(0xFF6D7890),
+                                    fontSize = 12.sp
+                                )
                             }
                             Text("Speech speed: ${String.format(Locale.US, "%.1f", speed)}×", color = Ink)
                             Slider(value = speed, onValueChange = { speed = it }, valueRange = 0.5f..2.0f)
