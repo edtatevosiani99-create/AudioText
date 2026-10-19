@@ -12,6 +12,8 @@ import android.speech.tts.Voice
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -185,6 +187,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         onSave: (String, Voice?, Float, (String) -> Unit) -> Unit
     ) {
         var text by remember { mutableStateOf("") }
+        var interfaceLanguage by remember { mutableStateOf(getSharedPreferences("settings", MODE_PRIVATE).getString("ui_language", "English") ?: "English") }
+        var languageMenu by remember { mutableStateOf(false) }
         var speed by remember { mutableFloatStateOf(1f) }
         var selectedVoice by remember { mutableStateOf<Voice?>(null) }
         var voiceMenu by remember { mutableStateOf(false) }
@@ -211,6 +215,18 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                             Text("AudioText", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Ink)
                             Text("Turn your words into audio", color = Color(0xFF6D7890), fontSize = 14.sp)
                         }
+                        Box {
+                            TextButton(onClick = { languageMenu = true }) { Text("🌐 " + interfaceLanguage, maxLines = 1) }
+                            DropdownMenu(expanded = languageMenu, onDismissRequest = { languageMenu = false }) {
+                                listOf("English", "Русский", "ქართული", "Deutsch").forEach { lang ->
+                                    DropdownMenuItem(text = { Text(lang) }, onClick = {
+                                        interfaceLanguage = lang
+                                        getSharedPreferences("settings", MODE_PRIVATE).edit().putString("ui_language", lang).apply()
+                                        languageMenu = false
+                                    })
+                                }
+                            }
+                        }
                     }
 
                     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
@@ -236,8 +252,24 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                                 }
                                 DropdownMenu(expanded = voiceMenu, onDismissRequest = { voiceMenu = false }, modifier = Modifier.heightIn(max = 320.dp)) {
                                     voices.forEach { voice ->
+                                        val isSelected = selectedVoice?.name == voice.name
+                                        val details = (voice.name + " " + voice.features.joinToString(" ")).lowercase(Locale.ROOT)
+                                        val gender = when {
+                                            listOf("female", "woman", "feminine", "жен").any { it in details } -> "♀ Female voice"
+                                            listOf("male", "man", "masculine", "муж").any { it in details } -> "♂ Male voice"
+                                            else -> "Gender not specified"
+                                        }
                                         DropdownMenuItem(
-                                            text = { Text("${voice.locale.displayLanguage} · ${voice.name}", maxLines = 2) },
+                                            text = {
+                                                Column(modifier = Modifier.fillMaxWidth().then(
+                                                    if (isSelected) Modifier.border(BorderStroke(2.dp, Color(0xFF45A9FF)), RoundedCornerShape(10.dp)).padding(8.dp)
+                                                    else Modifier.padding(8.dp)
+                                                )) {
+                                                    Text(voice.locale.displayLanguage + " · " + voice.name, maxLines = 2, color = if (isSelected) Color(0xFF1677D2) else Ink, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
+                                                    Text(gender, color = Color(0xFF6D7890), fontSize = 12.sp)
+                                                    if (isSelected) Text("✓ Currently selected", color = Color(0xFF1677D2), fontSize = 11.sp)
+                                                }
+                                            },
                                             onClick = { selectedVoice = voice; voiceMenu = false }
                                         )
                                     }
