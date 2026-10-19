@@ -39,6 +39,16 @@ private val Ink = Color(0xFF17233B)
 private val Blue = Color(0xFF356AE6)
 private val CanvasColor = Color(0xFFF5F7FB)
 
+private data class VoiceCharacter(val name: String, val description: String, val pitch: Float, val rate: Float) 
+private val VoiceCharacters = listOf(
+    VoiceCharacter("Natural", "Balanced", 1.0f, 1.0f),
+    VoiceCharacter("Deep", "Lower tone", 0.78f, 0.92f),
+    VoiceCharacter("Warm", "Soft, calm", 0.92f, 0.96f),
+    VoiceCharacter("Bright", "Higher tone", 1.22f, 1.04f),
+    VoiceCharacter("Gentle", "Light, soft", 1.10f, 0.90f),
+    VoiceCharacter("Energetic", "More lively", 1.08f, 1.12f)
+)
+
 class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
     private var ready by mutableStateOf(false)
@@ -62,7 +72,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                         status = "Open your phone's Text-to-speech settings and check available voice data."
                     }
                 },
-                onSpeak = { text, voice, speed ->
+                onSpeak = { text, voice, speed, pitch ->
                     val engine = tts
                     if (engine == null || !ready) {
                         status = "Text-to-speech is not ready yet."
@@ -70,6 +80,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                         status = "Enter some text first."
                     } else {
                         voice?.let { engine.voice = it }
+                        engine.setPitch(pitch)
                         engine.setSpeechRate(speed)
                         val maxPart = TextToSpeech.getMaxSpeechInputLength().coerceAtMost(3500)
                         val parts = text.chunked(maxPart)
@@ -84,7 +95,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     tts?.stop()
                     status = "Playback stopped."
                 },
-                onSave = { text, voice, speed, done ->
+                onSave = { text, voice, speed, pitch, done ->
                     val engine = tts
                     if (engine == null || !ready || text.isBlank()) {
                         done("Enter text and wait for voices to load.")
@@ -93,6 +104,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     } else {
                         engine.stop()
                         voice?.let { engine.voice = it }
+                        engine.setPitch(pitch)
                         engine.setSpeechRate(speed)
                         val output = File(cacheDir, "audiotext-${System.currentTimeMillis()}.wav")
                         pendingFile = output
@@ -182,15 +194,16 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         voices: List<Voice>,
         status: String,
         onInstallGeorgian: () -> Unit,
-        onSpeak: (String, Voice?, Float) -> Unit,
+        onSpeak: (String, Voice?, Float, Float) -> Unit,
         onStop: () -> Unit,
-        onSave: (String, Voice?, Float, (String) -> Unit) -> Unit
+        onSave: (String, Voice?, Float, Float, (String) -> Unit) -> Unit
     ) {
         var text by remember { mutableStateOf("") }
         var interfaceLanguage by remember { mutableStateOf(getSharedPreferences("settings", MODE_PRIVATE).getString("ui_language", "English") ?: "English") }
         var languageMenu by remember { mutableStateOf(false) }
         var speed by remember { mutableFloatStateOf(1f) }
         var selectedVoice by remember { mutableStateOf<Voice?>(null) }
+        var selectedCharacter by remember { mutableStateOf(VoiceCharacters.first()) }
         var voiceMenu by remember { mutableStateOf(false) }
         var savedStatus by remember { mutableStateOf("") }
         var history by remember { mutableStateOf(getSharedPreferences("history", MODE_PRIVATE).getString("items", "") ?: "") }
@@ -240,6 +253,28 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                                 shape = RoundedCornerShape(14.dp)
                             )
                             Text("${text.length} characters", color = Color(0xFF7B8497), fontSize = 12.sp)
+                        }
+                    }
+
+                    Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text("Voice characters", fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+                            Text("Choose a sound style. These presets adjust pitch and pace of the installed voice; they do not install new voices.", color = Color(0xFF6D7890), fontSize = 12.sp)
+                            VoiceCharacters.forEach { character ->
+                                val active = selectedCharacter.name == character.name
+                                OutlinedButton(
+                                    onClick = { selectedCharacter = character },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    border = BorderStroke(if (active) 2.dp else 1.dp, if (active) Color(0xFF45A9FF) else Color(0xFFD9DFEA)),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = if (active) Color(0xFF1677D2) else Ink)
+                                ) {
+                                    Column(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                                        Text((if (active) "✓ " else "") + character.name, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium)
+                                        Text(character.description, fontSize = 12.sp, color = Color(0xFF6D7890))
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -300,7 +335,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
                     Button(
                         onClick = {
-                            onSpeak(text, selectedVoice, speed)
+                            onSpeak(text, selectedVoice, speed * selectedCharacter.rate, selectedCharacter.pitch)
                             savedStatus = ""
                             history = getSharedPreferences("history", MODE_PRIVATE).getString("items", "") ?: ""
                         },
@@ -321,7 +356,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                         Button(
                             onClick = {
                                 savedStatus = "Preparing audio…"
-                                onSave(text, selectedVoice, speed) {
+                                onSave(text, selectedVoice, speed * selectedCharacter.rate, selectedCharacter.pitch) {
                                     savedStatus = it
                                     history = getSharedPreferences("history", MODE_PRIVATE).getString("items", "") ?: ""
                                 }
